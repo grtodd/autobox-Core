@@ -1,8 +1,22 @@
 Revision history for autobox::Core
 
-1.31 (not yet released)
+1.32
+    Docs
+    - Corrected spelling mistake (thanks again Gregor Herrmann)
+
+1.31
     Docs
     - Corrected spelling mistake (thanks Gregor Herrmann)
+    - Document that strings work as regexen (thanks jarich)
+
+    New Features
+    - Call backtick() qx() instead (but keep backtick around) (thanks jarich)
+
+    Incompatible Changes
+    - s() now returns the modified string or success/fail depending on context
+
+    Fix
+    - m() and nm() were failing to signal failure (thanks grtodd!)
 
 1.30
     New Features

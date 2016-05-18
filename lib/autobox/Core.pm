@@ -1,51 +1,16 @@
 package autobox::Core;
 
-# TODO:
-
-# o. Lars D implemented a times() method for scalars but there is no doc or comment and I don't see the point; commented it out for now.
-#    (scrottie)
-# o. @array->random ?
-# o. "5->times(sub { print "hi\n"}); # XXX likely to change but it's in the code so bloody doc it so I have incentive to rethink it". 
-#    well?  do we want this?  (scrottie)
-# o. kill head() and tail() -- does it really make sense to try to emulate linked lists with Perl arrays?  cute idea, but, uh. (scrottie)
-# o. "There's currently no counterpart to the C<< \ >> operator" -- but should we back away from trying to name operators and
-#    only do built-in functions? (scrottie)
-# o. I no longer think that center() belongs here; plenty of modules offer text formatting (scrottie)
-# o. don't overlap with autobox::List::Util.  or else do.  but decide.
-# o. make jive with MooseX::Autobox or whatever it is
-# v/ regenerate README
-# o. steal perl5i's docs too
-# o. IO::Any?
-# o. "appending the user-supplied arguments allows autobox::Core options to be overridden" -- document this if we haven't already
-# v/ more Hash::Util methods?
-# o. "If this goes over well, I'll make L<Langauge::Functional> a dependency and expose its function as methods on the correct data types. Or maybe I will do this anyway."
-#    ... maybe there should be filter, fold, reduce, etc methods
-# o. support 'my IO::Handle $io; $io->open('<', $fn);'. undef values belonging to
-#   SVs having associated types should dispatch to that class. of course, just using
-#   core, this could be made to work too -- open() is a built-in, after all. the
-#   autobox::Core::open would have to know how to handle $_[0] being undef and
-#   assigning the open'ed handle into $_[0].
-
-#
-# from http://search.cpan.org/~miyagawa/PSGI-1.03/PSGI/FAQ.pod:
-#
-# body.each { |buf| request.write(buf) }
-#
-#would just magically work whether body is an Array, FileIO object or an object that implements iterators. Perl doesn't have such a beautiful thing in the language unless autobox is loaded. PSGI should not make autobox as a requirement, so we only support a simple array ref or file handle.
-#
-# ... perl5i should unify interfaces to IO handles, arrays, hashes, objects, etc as much as possible.
-
-
 use 5.008;
 
 use strict;
 use warnings;
 
-our $VERSION = '1.30';
+our $VERSION = '1.32';
 
 use base 'autobox';
 
 use B;
+use Want ();
 
 # appending the user-supplied arguments allows autobox::Core options to be overridden
 # or extended in the same statement e.g.
@@ -86,7 +51,7 @@ autobox::Core - Provide core functions to autoboxed scalars, arrays and hashes.
   [10, 20, 30, 40, 50]->pop->say;
   [10, 20, 30, 40, 50]->shift->say;
 
-  my $lala = "Lalalalala\n"; 
+  my $lala = "Lalalalala\n";
   "chomp: "->concat($lala->chomp, " ", $lala)->say;
 
   my $hashref = { foo => 10, bar => 20, baz => 30, qux => 40 };
@@ -132,7 +97,7 @@ F<autobox::Core> makes it easier to avoid parentheses pile ups and
 messy dereferencing syntaxes.
 
 F<autobox::Core> is mostly glue.  It presents existing functions with a new
-interface, while adding few extra. Most of the methods read like 
+interface, while adding few extra. Most of the methods read like
 C<< sub hex { CORE::hex($_[0]) } >>.  In addition to built-ins from
 L<perlfunc> that operate on hashes, arrays, scalars, and code references,
 some Perl 6-ish things have been included, and some keywords like
@@ -193,7 +158,8 @@ there are additional operations and modifications to core behavior.
 
 Anything which takes a regular expression, such as L<split> and L<m>,
 usually take it in the form of a compiled regex (C<qr//>).  Any modifiers
-can be attached to the C<qr> normally.
+can be attached to the C<qr> normally.  Bare strings may be used in place
+of regular expressions, and Perl will compile it to a regex, as usual.
 
 These built in functions are implemented for scalars, they work just like normal:
 L<chomp|perlfunc/chomp>, L<chop|perlfunc/chop>,L<chr|perlfunc/chr>
@@ -203,7 +169,7 @@ L<pack|perlfunc/pack>, L<reverse|perlfunc/reverse> (always in scalar
 context), L<rindex|perlfunc/rindex>,
 L<sprintf|perlfunc/sprintf>, L<substr|perlfunc/substr>, L<uc|perlfunc/uc>
 L<ucfirst|perlfunc/ucfirst>, L<unpack|perlfunc/unpack>, L<quotemeta|perlfunc/quotemeta>,
-L<vec|perlfunc/vec>, L<undef|perlfunc/undef>, 
+L<vec|perlfunc/vec>, L<undef|perlfunc/undef>,
 L<split|perlfunc/split>, L<system|perlfunc/system>, L<eval|perlfunc/eval>.
 
 In addition, so are each of the following:
@@ -212,7 +178,7 @@ In addition, so are each of the following:
 
    $string1->concat($string2);
 
-Concatenates C<$string2> to C<$string1>. This 
+Concatenates C<$string2> to C<$string1>. This
 corresponds to the C<.> operator used to join two strings.  Returns the
 joined strings.
 
@@ -232,7 +198,7 @@ can also remove specific characters from the beginning and the end of
 string.
 
    '    hello'->trim;                   # 'hello'
-   '*+* hello *+*'->trim("*+");         # ' hello ' 
+   '*+* hello *+*'->trim("*+");         # ' hello '
    ' *+* hello *+*'->trim("*+");        # ' *+* hello'
 
 =head4 ltrim
@@ -252,9 +218,10 @@ Just like L<trim> but it only trims the right side (end) of the string.
 =head4 split
 
     my @split_string = $string->split(qr/.../);
+    my @split_string = $string->split(' ');
 
-A wrapper around L<split|perlfunc/split>.  It takes the regular
-expression as a compiled regex.
+A wrapper around L<split|perlfunc/split>. It takes the regular
+expression as a compiled regex, or a string which Perl parses as a regex.
 
    print "10, 20, 30, 40"->split(qr{, ?})->elements, "\n";
    "hi there"->split(qr/ */);           # h i t h e r e
@@ -284,13 +251,13 @@ C<$character> defaults to " ".
 C<center()> will never truncate C<$string>.  If $length is less
 than C<< $string->length >> it will just return C<$string>.
 
-    say "Hello"->center(4);        # "Hello";   
+    say "Hello"->center(4);        # "Hello";
 
-=head4 backtick
+=head4 qx
 
-    my $output = $string->backtick;
+    my $output = $string->qx;
 
-Runs $string as a command just like C<`$string`>.
+Runs $string as a command just enclosing it backticks, as in C<`$string`>.
 
 =head4 nm
 
@@ -327,10 +294,11 @@ list of values.
   my $string = "the cat sat on the mat";
   $string->s( qr/cat/, "dog" );
   $string->say;                 # the dog sat on the mat
-  
 
-Works the same as C<< s/// >>.  Returns the number of substitutions
-performed, not the target string.
+String substitution.  Works similarly to C<< s/// >>.
+In boolean context, it returns true/false to indicate whether the substitution succeeded.  C<if>, C<?:>, C<!>, and so on, all provide boolean context.
+It either fails or succeeds, having replaced only one occurrence on success -- it doesn't replace globally.
+In scalar context other than boolean context, it returns the modified string (incompatible change, new as of v 1.31).
 
 =head4 undef
 
@@ -365,7 +333,7 @@ These are methods having to do with input and ouptut, not filehandles.
 
     $string->print;
 
-Prints a string or a list of strings.  Returns true if successful.  
+Prints a string or a list of strings.  Returns true if successful.
 
 =head4 say
 
@@ -379,7 +347,7 @@ Methods related to boolean operations.
 
 =head4 and
 
-C<and> corresponds to C<&&>.  Returns true if both operands are true.  
+C<and> corresponds to C<&&>.  Returns true if both operands are true.
 
         if( $a->and($b) ) {
             ...
@@ -538,7 +506,7 @@ L<undef|perlfunc/undef>, L<exists|perlfunc/exists>,
 L<bless|perlfunc/bless>, L<tie|perlfunc/tie>, L<tied|perlfunc/tied>,
 L<ref|perlfunc/ref>, L<grep|perlfunc/grep>, L<map|perlfunc/map>,
 L<join|perlfunc/join>, L<reverse|perlfunc/reverse>, and
-L<sort|perlfunc/sort>, L<each|perlfunc/each>. 
+L<sort|perlfunc/sort>, L<each|perlfunc/each>.
 
 As well as:
 
@@ -552,7 +520,7 @@ Deletes a specified value from the array.
 
 =head4 uniq
 
-Removes all duplicate elements from an array and returns the new array 
+Removes all duplicate elements from an array and returns the new array
 with no duplicates.
 
    my @array = qw( 1 1 2 3 3 6 6 );
@@ -687,7 +655,7 @@ L<shift|perlfunc/shift> in that it does not change the array.
 
 =head4 tail
 
-Returns all but the first element from C<@list>. 
+Returns all but the first element from C<@list>.
 
     my @list = qw(foo bar baz quux);
     my @rest = @list->tail;  # [ 'bar', 'baz', 'quux' ]
@@ -803,7 +771,7 @@ You can get a sorted C<foreach> by combining C<keys>, C<sort>, and C<foreach>:
       print $_[0], ' is ', $hash{$_[0]}, "\n";
    });
 
-=head4 lock_keys  
+=head4 lock_keys
 
     %hash->lock_keys;
 
@@ -851,7 +819,7 @@ Dereferences a hash reference.
 Methods which work on code references.
 
 These are simple wrappers around the Perl core functions.
-L<bless|perlfunc/bless>, L<ref|perlfunc/ref>, 
+L<bless|perlfunc/bless>, L<ref|perlfunc/ref>,
 
 Due to Perl's precedence rules, some autoboxed literals may need to be
 parenthesized.  For instance, this works:
@@ -888,14 +856,14 @@ the first argument filled in.
 
 =over 4
 
-=item * 
+=item *
 
 File and socket operations are already implemented in an object-oriented
 fashion care of L<IO::Handle>, L<IO::Socket::INET>, and L<IO::Any>.
 
 =item *
 
-Functions listed in the L<perlfunc> headings 
+Functions listed in the L<perlfunc> headings
 
 =over 4
 
@@ -943,7 +911,7 @@ Functions listed in the L<perlfunc> headings
 
 =item *
 
-(Most) binary operators 
+(Most) binary operators
 
 =back
 
@@ -991,7 +959,7 @@ no passing, nothing.  This applies to constants too, not just variables.
 This is a more Perl 6 way of doing things.
 
   # Perl 6 - autoboxing associates classes with primitives types:
- 
+
   print 4.sqrt, "\n";
 
   print [ 1 .. 20 ].elems, "\n";
@@ -1229,6 +1197,10 @@ for a particular purpose.
 
 Scott Walters, scott@slowass.net.
 
+Tomasz Konojacki has been assisting with maint.
+
+Jacinta Richardson improved documentation and tidied up the interface.
+
 Michael Schwern and the L<perl5i> contributors for tests, code, and feedback.
 
 JJ contributed a C<strip> method for scalars - thanks JJ!
@@ -1246,7 +1218,7 @@ Thanks to Bruno Vecchi for bug fixes and many, many new tests going into version
 Thanks to L<http://github.com/daxim> daxim/Lars DIECKOW pushing in fixes and patches from the RT queue
 along with fixes to build and additional doc examples.
 
-Jacinta Richardson improved documentation.
+Thanks to everyone else who sent fixes or suggestions -- apologies if I failed to include you here!
 
 =cut
 
@@ -1300,12 +1272,23 @@ sub undef      { $_[0] = undef }
 sub defined    { CORE::defined($_[0]) }
 sub m          { my @ms = $_[0] =~ m{$_[1]} ;  return @ms ? \@ms : undef }
 sub nm         { my @ms = $_[0] =~ m{$_[1]} ;  return @ms ? undef : \@ms }
-sub s          { $_[0] =~ s{$_[1]}{$_[2]} }
 sub split      { wantarray ? split $_[1], $_[0] : [ split $_[1], $_[0] ] }
+sub s          {
+    my $success = ( $_[0] =~ s{$_[1]}{$_[2]} ) ? 1 : 0;
+    if (Want::want('LIST')) {
+        Want::rreturn ($_[0]);
+    } elsif (Want::want('BOOL')) {   # this needs to happen before the SCALAR context test
+        Want::rreturn $success;
+    } elsif (Want::want(qw'SCALAR')) {
+        Want::rreturn $_[0];
+    }
+    return;  # "You have to put this at the end to keep the compiler happy" from Want docs
+}
 
 sub eval       { CORE::eval "$_[0]"; }
 sub system     { CORE::system @_; }
 sub backtick   { `$_[0]`; }
+sub qx         { `$_[0]`; }     # per #16, "backtick should probably be called qx"
 
 #       Numeric functions
 
